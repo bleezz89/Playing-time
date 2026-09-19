@@ -135,6 +135,8 @@
     font-family: var(--num-font); font-weight: 700; font-size: 24px;
   }
   .add .btn { min-height: 48px; }
+  .add #numInput { flex: 0 1 120px; }
+  .add .nameinput { flex: 2 1 170px; font-family: var(--ui-font); font-weight: 600; font-size: 18px; }
   .msg { min-height: 22px; margin: 0 0 8px; color: var(--danger); font-weight: 600; font-size: 14px; }
   .msg.ok { color: var(--pitch); }
   .msg:empty { min-height: 0; margin: 0; }
@@ -152,6 +154,16 @@
 
   .num { font-family: var(--num-font); font-weight: 800; font-size: 56px; line-height: 1; min-width: 1.15em; text-align: center; }
   .num .hash { font-size: .45em; vertical-align: top; opacity: .6; margin-right: 1px; }
+  .who { display: flex; flex-direction: column; align-items: center; min-width: 64px; max-width: 76px; }
+  .pname {
+    margin-top: 2px; font-size: 13px; font-weight: 700; line-height: 1.15; text-align: center; opacity: .85;
+    overflow-wrap: anywhere; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .nameedit {
+    width: 100%; min-height: 48px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--line);
+    background: var(--bg); color: var(--ink); font-size: 18px; font-weight: 600;
+  }
+  .tname { font-family: var(--ui-font); font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 4px; }
   .time { font-family: var(--num-font); font-weight: 700; font-size: 40px; line-height: 1; white-space: nowrap; }
   .time .d { display: inline-block; width: .56em; text-align: center; }
   .time .c { display: inline-block; width: .3em; text-align: center; }
@@ -249,7 +261,8 @@
   </div>
 
   <div class="add" id="addRow" hidden>
-    <input id="numInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="Jersey number" aria-label="Jersey number">
+    <input id="numInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="Number" aria-label="Jersey number">
+    <input id="nameInput" class="nameinput" type="text" maxlength="20" placeholder="Name (optional)" autocomplete="off" autocapitalize="words" aria-label="Player name (optional)">
     <button class="btn solid" id="addBtn">Add player</button>
   </div>
   <p class="msg" id="msg" role="status"></p>
@@ -291,7 +304,7 @@
         if (d && Array.isArray(d.players)) {
           players = d.players.filter(function (p) { return p && typeof p.n === "string"; }).map(function (p) {
             var h = Array.isArray(p.h) ? p.h : [0, 0];
-            return { n: p.n, h: [num(h[0]), num(h[1])], since: typeof p.since === "number" ? p.since : null, queued: !!p.queued, st: num(p.st) };
+            return { n: p.n, h: [num(h[0]), num(h[1])], since: typeof p.since === "number" ? p.since : null, queued: !!p.queued, st: num(p.st), name: typeof p.name === "string" ? p.name.slice(0, 20) : "" };
           });
           if (d.game) {
             var g = d.game, gm = Array.isArray(g.ms) ? g.ms : [0, 0];
@@ -302,7 +315,7 @@
               return {
                 id: r.id, date: typeof r.date === "string" ? r.date : "", opp: typeof r.opp === "string" ? r.opp : "",
                 g: [num(r.g[0]), num(r.g[1])],
-                p: r.p.filter(function (p) { return p && typeof p.n === "string" && Array.isArray(p.h); }).map(function (p) { return { n: p.n, h: [num(p.h[0]), num(p.h[1])] }; })
+                p: r.p.filter(function (p) { return p && typeof p.n === "string" && Array.isArray(p.h); }).map(function (p) { return { n: p.n, name: typeof p.name === "string" ? p.name.slice(0, 20) : "", h: [num(p.h[0]), num(p.h[1])] }; })
               };
             });
           }
@@ -318,7 +331,7 @@
             if (p && typeof p.n === "string") {
               var ms = num(p.ms) + (typeof p.since === "number" ? Date.now() - p.since : 0);
               mx = Math.max(mx, ms);
-              players.push({ n: p.n, h: [ms, 0], since: null, queued: false, st: 0 });
+              players.push({ n: p.n, name: "", h: [ms, 0], since: null, queued: false, st: 0 });
             }
           });
           game.ms[0] = mx;
@@ -362,6 +375,8 @@
     return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   }
 
+  function tname(name) { return name ? ' <span class="tname">' + esc(name) + "</span>" : ""; }
+  function withName(n, name) { return "#" + n + (name ? " " + name : ""); }
   function sortPlayers() { players.sort(function (a, b) { return Number(a.n) - Number(b.n); }); }
   function find(n) { for (var i = 0; i < players.length; i++) if (players[i].n === n) return players[i]; return null; }
   function $(id) { return document.getElementById(id); }
@@ -422,7 +437,7 @@
       date: /^\d{4}-\d{2}-\d{2}$/.test(dv) ? dv : todayStr(),
       opp: opp,
       g: [game.ms[0], game.ms[1]],
-      p: players.map(function (p) { return { n: p.n, h: [p.h[0], p.h[1]] }; })
+      p: players.map(function (p) { return { n: p.n, name: (p.name || "").trim(), h: [p.h[0], p.h[1]] }; })
     };
     games.unshift(rec);
     newGame();
@@ -449,26 +464,26 @@
       "Game time " + fmt(tot) + " (1st " + fmt(r.g[0]) + ", 2nd " + fmt(r.g[1]) + ")", ""];
     r.p.forEach(function (p) {
       var t = p.h[0] + p.h[1];
-      lines.push("#" + p.n + "  " + fmt(t) + "  (1st " + fmt(p.h[0]) + ", 2nd " + fmt(p.h[1]) + ")  " + pctText(t, tot));
+      lines.push(withName(p.n, p.name) + "  " + fmt(t) + "  (1st " + fmt(p.h[0]) + ", 2nd " + fmt(p.h[1]) + ")  " + pctText(t, tot));
     });
     return lines.join("\n");
   }
   function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
   function gameCSV(r) {
     var tot = r.g[0] + r.g[1];
-    var rows = [["Player", "1st half", "2nd half", "Total", "Percent of game"]];
+    var rows = [["Player", "Name", "1st half", "2nd half", "Total", "Percent of game"]];
     r.p.forEach(function (p) {
       var t = p.h[0] + p.h[1];
-      rows.push([p.n, fmt(p.h[0]), fmt(p.h[1]), fmt(t), pctText(t, tot)]);
+      rows.push([p.n, p.name || "", fmt(p.h[0]), fmt(p.h[1]), fmt(t), pctText(t, tot)]);
     });
-    rows.push(["Game clock", fmt(r.g[0]), fmt(r.g[1]), fmt(tot), ""]);
+    rows.push(["Game clock", "", fmt(r.g[0]), fmt(r.g[1]), fmt(tot), ""]);
     return rows.map(function (r2) { return r2.map(csvCell).join(","); }).join("\n");
   }
   function allCSV() {
-    var rows = [["Date", "Opponent", "Player", "1st half", "2nd half", "Total"]];
+    var rows = [["Date", "Opponent", "Player", "Name", "1st half", "2nd half", "Total"]];
     games.slice().reverse().forEach(function (r) {
       r.p.forEach(function (p) {
-        rows.push([r.date, r.opp, p.n, fmt(p.h[0]), fmt(p.h[1]), fmt(p.h[0] + p.h[1])]);
+        rows.push([r.date, r.opp, p.n, p.name || "", fmt(p.h[0]), fmt(p.h[1]), fmt(p.h[0] + p.h[1])]);
       });
     });
     return rows.map(function (r2) { return r2.map(csvCell).join(","); }).join("\n");
@@ -554,7 +569,7 @@
 
   function liveSummaryHTML() {
     var rows = players.map(function (p) {
-      return '<tr><th scope="row">#' + p.n + '</th><td data-t="' + p.n + ':0"></td><td data-t="' + p.n + ':1"></td>' +
+      return '<tr><th scope="row">#' + p.n + tname((p.name || "").trim()) + '</th><td data-t="' + p.n + ':0"></td><td data-t="' + p.n + ':1"></td>' +
         '<td data-t="' + p.n + ':tot"></td><td data-t="' + p.n + ':pct"></td></tr>';
     }).join("");
     return '<div class="tablewrap"><table><thead><tr><th>Player</th><th>1st half</th><th>2nd half</th><th>Total</th><th>Of game</th></tr></thead>' +
@@ -566,7 +581,7 @@
     var tot = r.g[0] + r.g[1];
     var rows = r.p.map(function (p) {
       var t = p.h[0] + p.h[1];
-      return '<tr><th scope="row">#' + esc(p.n) + "</th><td>" + fmt(p.h[0]) + "</td><td>" + fmt(p.h[1]) + "</td><td>" + fmt(t) + "</td><td>" + pctText(t, tot) + "</td></tr>";
+      return '<tr><th scope="row">#' + esc(p.n) + tname(p.name) + "</th><td>" + fmt(p.h[0]) + "</td><td>" + fmt(p.h[1]) + "</td><td>" + fmt(t) + "</td><td>" + pctText(t, tot) + "</td></tr>";
     }).join("");
     return '<div class="tablewrap"><table><thead><tr><th>Player</th><th>1st half</th><th>2nd half</th><th>Total</th><th>Of game</th></tr></thead>' +
       "<tbody>" + rows + "</tbody>" +
@@ -578,7 +593,8 @@
     games.forEach(function (r) {
       r.p.forEach(function (p) {
         var t = p.h[0] + p.h[1];
-        var m = map[p.n] || (map[p.n] = { n: p.n, gp: 0, tot: 0 });
+        var m = map[p.n] || (map[p.n] = { n: p.n, gp: 0, tot: 0, name: "" });
+        if (!m.name && p.name) m.name = p.name;
         if (t > 0) { m.gp++; m.tot += t; }
       });
     });
@@ -587,7 +603,7 @@
     return "<h2>Season totals</h2>" +
       '<div class="tablewrap"><table><thead><tr><th>Player</th><th>Games</th><th>Total</th><th>Average</th></tr></thead><tbody>' +
       rows.map(function (m) {
-        return '<tr><th scope="row">#' + esc(m.n) + "</th><td>" + m.gp + "</td><td>" + fmt(m.tot) + "</td><td>" + (m.gp ? fmt(m.tot / m.gp) : "–") + "</td></tr>";
+        return '<tr><th scope="row">#' + esc(m.n) + tname(m.name) + "</th><td>" + m.gp + "</td><td>" + fmt(m.tot) + "</td><td>" + (m.gp ? fmt(m.tot / m.gp) : "–") + "</td></tr>";
       }).join("") + "</tbody></table></div>";
   }
 
@@ -639,15 +655,21 @@
       var word = isOn ? "On field" : (isReady ? (p.st > 0 ? "Paused" : "Ready to start") : "Bench");
       var showSt = isOn || (isReady && p.st > 0);
       var action;
+      var who = withName(p.n, (p.name || "").trim());
       if (editMode) {
-        action = '<button class="act remove" data-action="remove" data-n="' + p.n + '" aria-label="Remove player ' + p.n + '">Remove</button>';
+        action = '<button class="act remove" data-action="remove" data-n="' + p.n + '" aria-label="Remove player ' + esc(who) + '">Remove</button>';
+        return '<div class="tile">' +
+          '<div class="who"><div class="num"><span class="hash">#</span>' + p.n + "</div></div>" +
+          '<div><input class="nameedit" data-n="' + p.n + '" value="' + esc(p.name || "") + '" maxlength="20" placeholder="Name (optional)" autocomplete="off" autocapitalize="words" aria-label="Name for player ' + p.n + '"></div>' +
+          action + "</div>";
       } else {
         var label = isOn ? "Stop" : (isReady ? "Cancel" : "Start");
         action = '<button class="act" data-action="toggle" data-n="' + p.n + '"' + (game.over ? " disabled" : "") +
-          ' aria-label="' + label + " player " + p.n + '">' + label + "</button>";
+          ' aria-label="' + label + " player " + esc(who) + '">' + label + "</button>";
       }
       return '<div class="tile' + (isOn ? " on" : "") + (isReady ? " ready" : "") + '">' +
-        '<div class="num"><span class="hash">#</span>' + p.n + "</div>" +
+        '<div class="who"><div class="num"><span class="hash">#</span>' + p.n + "</div>" +
+        ((p.name || "").trim() ? '<div class="pname">' + esc(p.name.trim()) + "</div>" : "") + "</div>" +
         '<div><div class="time" data-t="' + p.n + ':h"></div>' +
         '<span class="state">' + word + (showSt ? ' <span data-t="' + p.n + ':st"></span>' : "") + "</span>" +
         '<span class="state">Total <span data-t="' + p.n + ':tot"></span></span></div>' +
@@ -704,12 +726,12 @@
 
   function setMsg(t, ok) { msgEl.textContent = t || ""; msgEl.classList.toggle("ok", !!ok); }
 
-  function addPlayer(raw) {
+  function addPlayer(raw, rawName) {
     var n = String(raw).trim();
     if (!/^\d{1,3}$/.test(n)) { setMsg("Enter a jersey number from 0 to 999."); return false; }
     n = String(Number(n));
     if (find(n)) { setMsg("#" + n + " is already on the roster."); return false; }
-    players.push({ n: n, h: [0, 0], since: null, queued: false, st: 0 });
+    players.push({ n: n, name: String(rawName || "").trim().slice(0, 20), h: [0, 0], since: null, queued: false, st: 0 });
     sortPlayers(); save(); setMsg(""); render();
     return true;
   }
@@ -722,10 +744,28 @@
 
   // ---- events ----
   $("addBtn").addEventListener("click", function () {
-    if (addPlayer(inputEl.value)) inputEl.value = "";
+    if (addPlayer(inputEl.value, $("nameInput").value)) { inputEl.value = ""; $("nameInput").value = ""; }
     inputEl.focus();
   });
   inputEl.addEventListener("keydown", function (e) { if (e.key === "Enter") $("addBtn").click(); });
+  $("nameInput").addEventListener("keydown", function (e) { if (e.key === "Enter") $("addBtn").click(); });
+
+  // Editing names on the roster screen
+  listEl.addEventListener("input", function (e) {
+    var t = e.target;
+    if (!t.classList || !t.classList.contains("nameedit")) return;
+    var p = find(t.getAttribute("data-n"));
+    if (p) { p.name = t.value.slice(0, 20); save(); }
+  });
+  listEl.addEventListener("change", function (e) {
+    var t = e.target;
+    if (!t.classList || !t.classList.contains("nameedit")) return;
+    var p = find(t.getAttribute("data-n"));
+    if (p) { p.name = t.value.trim().slice(0, 20); t.value = p.name; save(); }
+  });
+  listEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target.classList && e.target.classList.contains("nameedit")) e.target.blur();
+  });
   inputEl.addEventListener("input", function () { setMsg(""); });
 
   listEl.addEventListener("click", function (e) {
@@ -738,7 +778,7 @@
       players = players.filter(function (p) { return p.n !== n; });
       save(); render();
     } else if (a === "quick") {
-      for (var i = 1; i <= 11; i++) if (!find(String(i))) players.push({ n: String(i), h: [0, 0], since: null, queued: false, st: 0 });
+      for (var i = 1; i <= 11; i++) if (!find(String(i))) players.push({ n: String(i), name: "", h: [0, 0], since: null, queued: false, st: 0 });
       sortPlayers(); save(); render();
     } else if (a === "open") {
       detailId = btn.getAttribute("data-id"); view = "detail"; manualText = ""; setMsg(""); render(); window.scrollTo(0, 0);
@@ -797,6 +837,7 @@
   $("editBtn").addEventListener("click", function () {
     if (view !== "players") { view = "players"; editMode = true; }
     else editMode = !editMode;
+    if (!editMode) { players.forEach(function (p) { p.name = (p.name || "").trim(); }); save(); }
     setMsg(""); render();
     if (editMode) inputEl.focus();
   });
